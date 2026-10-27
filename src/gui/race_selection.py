@@ -13,7 +13,16 @@ import uuid
 from datetime import datetime, timezone
 from src.f1_data import get_race_weekends_by_year, get_race_weekends_by_place, get_all_unique_race_names, load_session
 from src.gui.settings_dialog import SettingsDialog
+from src.lib import f1_auth
 from src.lib.season import get_season
+
+F1_LOGIN_NOTICE = (
+    "FastF1 currently requires a Formula 1 account to download telemetry that "
+    "isn't cached locally. This is a known issue that the FastF1 maintainers "
+    "are working on. You don't need to enter any credentials: once it's fixed, "
+    "this session will load normally. Sessions you've loaded before will keep "
+    "working."
+)
 
 # Worker thread to fetch schedule without blocking UI
 class FetchScheduleWorker(QThread):
@@ -408,12 +417,18 @@ class RaceSelectionWindow(QMainWindow):
                         enable_cache()
                     except Exception:
                         pass
+                    f1_auth.install()
                     sess = load_session(self.year, self.round_no, self.session_type)
                     self.result.emit(sess)
                 except Exception as e:
                     self.error.emit(str(e))
 
         def _on_loaded(session_obj):
+            if f1_auth.login_was_requested():
+                dlg.close()
+                QMessageBox.warning(self, "F1 account required", F1_LOGIN_NOTICE)
+                return
+
             # create a unique ready-file path and pass it to the child
             ready_path = os.path.join(tempfile.gettempdir(), f"f1_ready_{uuid.uuid4().hex}")
             cmd_with_ready = list(cmd) + ["--ready-file", ready_path]
